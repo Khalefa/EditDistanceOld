@@ -194,10 +194,21 @@ ErrorCode EndQuery(QueryID query_id)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+
+int GetWordValue(const char * s, int n){
+	int value=0;
+	for(int i=0;i<n;i++){
+		char c=s[i]-'A';
+		if(c>=32)c=c-32;
+		value+=c;
+	}
+	return value;
+}
+
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
 	char cur_doc_str[MAX_DOC_LENGTH];
-	strcpy(cur_doc_str, doc_str);
+	strcpy(cur_doc_str, doc_str); //I really want to remove this
 
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
@@ -220,7 +231,8 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			char qt=quer->str[iq];
 			quer->str[iq]=0;
 			lq=iq-lq;
-
+			
+			int qword_value=GetWordValue(qword,lq);            
 			bool matching_word=false;
 
 			int id=0;
@@ -236,20 +248,25 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 				cur_doc_str[id]=0;
 
 				ld=id-ld;
-
-				if(quer->match_type==MT_EXACT_MATCH)
-				{
-					if(strcmp(qword, dword)==0) matching_word=true;
-				}
-				else if(quer->match_type==MT_HAMMING_DIST)
-				{
-					unsigned int num_mismatches=HammingDistance(qword, lq, dword, ld);
-					if(num_mismatches<=quer->match_dist) matching_word=true;
-				}
-				else if(quer->match_type==MT_EDIT_DIST)
-				{
-					unsigned int edit_dist=EditDistance(qword, lq, dword, ld);
-					if(edit_dist<=quer->match_dist) matching_word=true;
+				int dword_value=GetWordValue(dword,ld);
+				int delta=dword_value-qword_value;
+				if(delta<0)delta=-delta;
+				if(delta<=26*quer->match_dist){
+					if(quer->match_type==MT_EXACT_MATCH)
+					{
+						if(ld==lq) //same length
+							if(strcmp(qword, dword)==0) matching_word=true;
+					}
+					else if(quer->match_type==MT_HAMMING_DIST)
+					{
+						unsigned int num_mismatches=HammingDistance(qword, lq, dword, ld);
+						if(num_mismatches<=quer->match_dist) matching_word=true;
+					}
+					else if(quer->match_type==MT_EDIT_DIST)
+					{
+						unsigned int edit_dist=EditDistance(qword, lq, dword, ld);
+						if(edit_dist<=quer->match_dist) matching_word=true;
+					}
 				}
 
 				cur_doc_str[id]=dt;
