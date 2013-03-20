@@ -1,18 +1,24 @@
-#include "core.h"
+#include "../include/core.h"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
 #include <vector>
-#include <map>
-#include <set>
-#define WORD_LIST
+#include <bitset>
+#include <unordered_set>
+#include <unordered_map>
+#include <iostream>
+#include <algorithm> 
+#include <algorithm> 
+#include <utility> 
 using namespace std;
 
+bitset<(31-4)*26> mask; 
+unordered_map<std::string,int> words;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 // Computes edit distance between a null-terminated string "a" with length "na"
 //  and a null-terminated string "b" with length "nb" 
-int EditDistance(const char* a, int na, const char* b, int nb)
+int EditDistance(char* a, int na, char* b, int nb)
 {
 	int oo=0x7FFFFFFF;
 
@@ -70,14 +76,14 @@ int EditDistance(const char* a, int na, const char* b, int nb)
 
 // Computes Hamming distance between a null-terminated string "a" with length "na"
 //  and a null-terminated string "b" with length "nb" 
-unsigned int HammingDistance(const char* a, int na, const char* b, int nb)
+unsigned int HammingDistance(char* a, int na, char* b, int nb)
 {
 	int j, oo=0x7FFFFFFF;
 	if(na!=nb) return oo;
-
+	
 	unsigned int num_mismatches=0;
 	for(j=0;j<na;j++) if(a[j]!=b[j]) num_mismatches++;
-
+	
 	return num_mismatches;
 }
 
@@ -90,9 +96,6 @@ struct Query
 	char str[MAX_QUERY_LENGTH];
 	MatchType match_type;
 	unsigned int match_dist;
-#ifdef WORD_LIST
-	vector<unsigned int> words;
-#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,29 +111,12 @@ struct Document
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 // Keeps all currently active queries
+vector<Query> Equeries;
 vector<Query> queries;
 
 // Keeps all currently available results that has not been returned yet
 vector<Document> docs;
 
-#ifdef WORD_LIST
-//a flat word list
-typedef struct _word{
-	char str[MAX_WORD_LENGTH+1];
-	vector <int> queries_id;
-} Word;
-
-vector<Word> words;
-
-int findInwords(char* str){
-	for (int i=0;i< words.size() ;  i++){
-		Word *w=&words[i];
-		if(strcmp(w->str, str)==0) 
-			return i;
-	}
-	return -1;
-}
-#endif
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 ErrorCode InitializeIndex(){return EC_SUCCESS;}
@@ -140,6 +126,14 @@ ErrorCode InitializeIndex(){return EC_SUCCESS;}
 ErrorCode DestroyIndex(){return EC_SUCCESS;}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
+int WordValue(const char * word, int lq){
+int val=0;
+for(int i=0;i<lq;i++){
+val+=word[i]-'a';
+}
+return val;
+}
+
 
 ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_type, unsigned int match_dist)
 {
@@ -148,135 +142,136 @@ ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_ty
 	strcpy(query.str, query_str);
 	query.match_type=match_type;
 	query.match_dist=match_dist;
-#ifdef WORD_LIST
-	int iq=0;
-	while(query.str[iq]){
-		while(query.str[iq]==' ') iq++;
-		if(!query.str[iq]) break;
-		char* qword=&query.str[iq];
-
-		int lq=iq;
-		while(query.str[iq] && query.str[iq]!=' ') iq++;
-		char qt=query.str[iq];
-		query.str[iq]=0;
-		lq=iq-lq;
-
-		//check if qword is already there
-		int  i=findInwords(qword);
-		if (i>=0){
-			words[i].queries_id.push_back(query_id);
-			query.words.push_back(i);
-		} else {
-			Word w;
-			strcpy(w.str,qword);
-			w.queries_id.push_back(query_id);
-			words.push_back(w);
-			query.words.push_back(findInwords(qword));
-		}
-//		printf("i%d %s\n",findInwords(qword), qword);
-		query.str[iq]=qt;
-	}
-#endif	
 	// Add this query to the active query set
-	queries.push_back(query);
-//printf("Query %d words %d\n", query.query_id, query.words.size());
-	return EC_SUCCESS;
-}
+	if(query.match_type==MT_EXACT_MATCH) 
+		Equeries.push_back(query);
+	else{
+		queries.push_back(query);
+		return EC_SUCCESS; 
+	}
+	//check if the words are new
+	int iq=0;
+	while(query.str[iq] )
+		{
+			while(query.str[iq]==' ') iq++;
+			if(!query.str[iq]) break;
+			char* qword=&query.str[iq];
 
+			int lq=iq;
+			while(query.str[iq] && query.str[iq]!=' ') iq++;
+			char qt=query.str[iq];
+			query.str[iq]=0;
+			lq=iq-lq;
+			words[qword]++;
+			mask.set(WordValue(qword,lq));
+			query.str[iq]=qt;
+		}
+	
+	//print words
+
+return EC_SUCCESS;
+
+}
+void printwords(){
+for ( auto it = words.cbegin(); it != words.cend(); ++it )
+    cout << " " << (*it).first << '('<<(*it).second <<')';    // cannot modify *it
+  cout << endl;
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 ErrorCode EndQuery(QueryID query_id)
 {
 	// Remove this query from the active query set
-//	printf("Del Query %d\n",query_id);
 	unsigned int i, n=queries.size();
 	for(i=0;i<n;i++)
 	{
 		if(queries[i].query_id==query_id)
 		{
 			queries.erase(queries.begin()+i);
+			return EC_SUCCESS;
+		}
+	}
+        n=Equeries.size();
+	for(i=0;i<n;i++)
+	{
+		if(Equeries[i].query_id==query_id)
+		{
+			Query *query=&Equeries[i];
+
+			int iq=0;
+			while(query->str[iq]){
+				while(query->str[iq]==' ') iq++;
+				if(!query->str[iq]) break;
+				char* qword=&query->str[iq];
+	
+				int lq=iq;
+				while(query->str[iq] && query->str[iq]!=' ') iq++;
+				char qt=query->str[iq];
+				query->str[iq]=0;
+				lq=iq-lq;
+				int l=words[qword]--;
+				if(l==0)  {
+					words.erase (qword);        
+					mask.set(WordValue(qword,lq),0);
+				}
+				query->str[iq]=qt;
+				}
+			
+				Equeries.erase(Equeries.begin()+i);
 			break;
 		}
 	}
-	for(i=0;i<n;i++)
-
-		return EC_SUCCESS;
+	return EC_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+//bool myfunction(auto  x, auto y){
+//return x->second>y->second;
+//}
+struct sort_pred {
+    bool operator()(const std::pair<string,int> &left, const std::pair<string,int> &right) {
+        return left.second < right.second;
+    }
+};
 
-int GetWordValue(const char * s, int n){
-	int value=0;
-	for(int i=0;i<n;i++){
-		char c=s[i]-'A';
-		if(c>=32)c=c-32;
-		value+=c;
-	}
-	return value;
-}
-int MatchWord(const char *dword, const char *qword, int ld, int lq, int dword_value, const Query * quer){
-	int matching_word=false;
 
-	int qword_value=GetWordValue(qword,lq);            	
-	int delta=dword_value-qword_value;
-	if(delta<0)delta=-delta;
-	if(delta<=26*quer->match_dist){
-		if(quer->match_type==MT_EXACT_MATCH)
-		{
-			if(ld==lq) //same length
-				if(strcmp(qword, dword)==0) matching_word=true;
-		}
-		else if(quer->match_type==MT_HAMMING_DIST)
-		{
-			if(ld==lq){ 						
-				unsigned int num_mismatches=HammingDistance(qword, lq, dword, ld);
-				if(num_mismatches<=quer->match_dist) matching_word=true;
-			}
-		}
-		else if(quer->match_type==MT_EDIT_DIST)
-		{
-			unsigned int edit_dist=EditDistance(qword, lq, dword, ld);
-			if(edit_dist<=quer->match_dist) matching_word=true;
-		}
-	}
 
-	return matching_word;
-}
-ErrorCode MatchDocumentQ(DocID doc_id,  char* cur_doc_str, vector<Query> squeries);
-ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
-{
-	char cur_doc_str[MAX_DOC_LENGTH];
-	strcpy(cur_doc_str, doc_str); //I really want to remove this
-	vector<Query> s_queries;
-//	set <unsigned int> foundWords;
-
-	unsigned int i, n=queries.size();
-#if 1	
-	map<unsigned int,int> lqueries;
-	for(i=0;i<n;i++)
-	{
-		Query* quer=&queries[i];
-		int qid=quer->query_id;	
-		int q_length=0;
+vector<unsigned int> MatchEDocument(DocID doc_id, char* cur_doc_str){
+	unsigned int i, n=Equeries.size();
+	vector<unsigned int> query_ids;
+	//sort words by count
+//	std::vector<pair<std::string, int>> sorted_words;
+//	for ( auto it = words.cbegin(); it != words.cend(); ++it ){
+//	sorted_words.push_back(std::make_pair(it->first, it->second) );	    		
+//		}
+//	std::sort(sorted_words.begin(), sorted_words.end(), sort_pred());	
+//	printwords();
+	unordered_map<std::string,int>  foundwords;
+	//
+	unordered_map<std::string,vector<int>> words_queries;
 		int iq=0;
-		while(quer->str[iq] )
+		while(quer->str[iq] && matching_query)
 		{
 			while(quer->str[iq]==' ') iq++;
 			if(!quer->str[iq]) break;
+			char* qword=&quer->str[iq];
 
 			int lq=iq;
 			while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+			char qt=quer->str[iq];
+			quer->str[iq]=0;
 			lq=iq-lq;
-			q_length+=lq;
+			if(foundwords[qword]==0) matching_query=false;
+			quer->str[iq]=qt;
 		}
-		lqueries[qid]=q_length;
-	}	
-#endif
-	// Start scaning the document
+
+
+  	for ( auto it = words.cbegin(); it != words.cend(); ++it )
+    		foundwords[it->first]=0;
+
 	int id=0;
-	while(cur_doc_str[id])
-	{
+	while(cur_doc_str[id] )	{
 		while(cur_doc_str[id]==' ') id++;
 		if(!cur_doc_str[id]) break;
 		char* dword=&cur_doc_str[id];
@@ -285,78 +280,62 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 		while(cur_doc_str[id] && cur_doc_str[id]!=' ') id++;
 		char dt=cur_doc_str[id];
 		cur_doc_str[id]=0;
+
 		ld=id-ld;
-
-		int dword_value=GetWordValue(dword,ld);
-
-		for(i=0;i<n ;i++)
-		{
-			int qid =queries[i].query_id;
-			if (lqueries[qid]<=0)continue;
-
-			Query* quer=&queries[i];
-
-			int iq=0;
-			while(quer->str[iq])
-			{
-				int matching_word=false;
-
-				while(quer->str[iq]==' ') iq++;
-				if(!quer->str[iq]) break;
-				char* qword=&quer->str[iq];
-
-				int lq=iq;
-				while(quer->str[iq] && quer->str[iq]!=' ') iq++;
-				char qt=quer->str[iq];
-				quer->str[iq]=0;
-				lq=iq-lq;
-				matching_word=MatchWord(dword,qword,  ld,  lq, dword_value, quer);
-				if (matching_word){
-					// update statisics
-					lqueries[qid]=-1;
-//					int i=findInwords(qword); 
-//					foundWords.insert(i);
-				}
-				quer->str[iq]=qt;
-			}
+		if (mask[WordValue(dword,ld)]==1) {
+		unordered_map<std::string,int>::const_iterator	got= words.find(dword);
+		if ( got != words.end() ) foundwords[dword]=1;
 		}
+
 		cur_doc_str[id]=dt;
 	}
 
-	for(int i=0;i<n;i++){
-		unsigned int qid=queries[i].query_id;
-		if(lqueries[qid]<=0)  {
-				s_queries.push_back(queries[i]);
+	//now, iterate 
+	// Iterate on all active queries to compare them with this new document
+	for(i=0;i<n;i++)
+	{
+		bool matching_query=true;
+		Query* quer=&Equeries[i];
 
+		int iq=0;
+		while(quer->str[iq] && matching_query)
+		{
+			while(quer->str[iq]==' ') iq++;
+			if(!quer->str[iq]) break;
+			char* qword=&quer->str[iq];
+
+			int lq=iq;
+			while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+			char qt=quer->str[iq];
+			quer->str[iq]=0;
+			lq=iq-lq;
+			if(foundwords[qword]==0) matching_query=false;
+			quer->str[iq]=qt;
+		}
+		if(matching_query)
+		{
+			// This query matches the document
+			query_ids.push_back(quer->query_id);
 		}
 	}
-/*	Document doc;
-	doc.doc_id=doc_id;
-	doc.num_res=query_ids.size();
-	doc.query_ids=0;
-	if(doc.num_res) doc.query_ids=(unsigned int*)malloc(doc.num_res*sizeof(unsigned int));
-	for(i=0;i<doc.num_res;i++) doc.query_ids[i]=query_ids[i];
-	// Add this result to the set of undelivered results
-	docs.push_back(doc);
+	return query_ids;
 
-*/ 
-	MatchDocumentQ(doc_id,cur_doc_str,queries);
-	return EC_SUCCESS;
 }
 
-ErrorCode MatchDocumentQ(DocID doc_id,  char* cur_doc_str, vector<Query> squeries)
-{
-	//char cur_doc_str[MAX_DOC_LENGTH];
-	//strcpy(cur_doc_str, doc_str);
 
-	unsigned int i, n=squeries.size();
-	vector<unsigned int> query_ids;
+ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
+{
+	char cur_doc_str[MAX_DOC_LENGTH];
+	strcpy(cur_doc_str, doc_str);
+
+	unsigned int i, n=queries.size();
+	vector<unsigned int> query_ids;//= MatchEDocument(doc_id,cur_doc_str);
 
 	// Iterate on all active queries to compare them with this new document
 	for(i=0;i<n;i++)
 	{
 		bool matching_query=true;
-		Query* quer=&squeries[i];
+		Query* quer=&queries[i];
 
 		int iq=0;
 		while(quer->str[iq] && matching_query)
@@ -387,11 +366,12 @@ ErrorCode MatchDocumentQ(DocID doc_id,  char* cur_doc_str, vector<Query> squerie
 
 				ld=id-ld;
 
-				if(quer->match_type==MT_EXACT_MATCH)
-				{
-					if(strcmp(qword, dword)==0) matching_word=true;
-				}
-				else if(quer->match_type==MT_HAMMING_DIST)
+//				if(quer->match_type==MT_EXACT_MATCH)
+//				{
+//					if(strcmp(qword, dword)==0) matching_word=true;
+//				}
+//				else 
+				if(quer->match_type==MT_HAMMING_DIST)
 				{
 					unsigned int num_mismatches=HammingDistance(qword, lq, dword, ld);
 					if(num_mismatches<=quer->match_dist) matching_word=true;
@@ -420,7 +400,7 @@ ErrorCode MatchDocumentQ(DocID doc_id,  char* cur_doc_str, vector<Query> squerie
 			query_ids.push_back(quer->query_id);
 		}
 	}
-
+	sort(query_ids.begin(),query_ids.end());
 	Document doc;
 	doc.doc_id=doc_id;
 	doc.num_res=query_ids.size();
