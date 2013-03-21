@@ -172,13 +172,69 @@ ErrorCode EndQuery(QueryID query_id)
 //two ideas
 //remove from doc all non matched words
 //edit distancce
+//get query length
+
+bitset<32> QueryLength(){
+	bitset<32> lengths; 
+	unsigned int i, n=queries.size();
+
+	for(i=0;i<n;i++)
+	{
+		Query* quer=&queries[i];
+		//fail quickly if any word of query is in not_found
+		int iq=0;
+		while(quer->str[iq])
+		{
+			while(quer->str[iq]==' ') iq++;
+			if(!quer->str[iq]) break;
+			char* qword=&quer->str[iq];
+
+			int lq=iq;
+			while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+			lq=iq-lq;
+			if(quer->match_type==MT_EDIT_DIST)
+			{
+				for(int len=lq-quer->match_dist; len <lq+quer->match_dist;len++)
+				{
+					if(len>=4&& len<=31)
+						lengths.set(len);
+				}
+
+			} else 	lengths.set(lq);
+		}
+	}
+	return lengths;
+}
+
+void doc(char *doc_str){
+	float removed=0;
+	bitset<32> lengths=QueryLength();
+	int id=0;
+	while(doc_str[id] )
+	{
+		while(doc_str[id]==' ') id++;
+		if(!doc_str[id]) break;
+		int s_id=id;
+
+		int ld=id;
+		while(doc_str[id] && doc_str[id]!=' ') id++;
+
+		if(lengths[id-ld]==0)
+		{//need to remove it
+			removed+=id-ld;
+			for(int i=s_id;i<ld;i++) doc_str[i]=0;
+		}
+	}
+//printf("Removed %f %f\n",removed, removed/id);
+}
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
 	char cur_doc_str[MAX_DOC_LENGTH];
 	strcpy(cur_doc_str, doc_str);
-	
+	doc(cur_doc_str);
+	bitset<32> query_length=QueryLength();	
 	bitset<(31-4)*26> f_mask;
-//	bitset<(31-4)*26> nf_mask;
+	
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
 	//store found words
@@ -204,7 +260,6 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 				quer->str[iq]=0;
 				lq=iq-lq;
 				int qval=WordValue(qword,lq);
-				//if(nf_mask[qval])
 					if(not_found_words.find(qword)!=not_found_words.end()) {
 						matching_query=false;
 						quer->str[iq]=qt;
@@ -230,14 +285,14 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
 				int id=0;
-				while(doc_str[id] && !matching_word)
+				while(cur_doc_str[id] && !matching_word)
 				{
-					while(doc_str[id]==' ') id++;
-					if(!doc_str[id]) break;
-					const char* dword=&doc_str[id];
+					while(cur_doc_str[id]==' ') id++;
+					if(!cur_doc_str[id]) break;
+					const char* dword=&cur_doc_str[id];
 
 					int ld=id;
-					while(doc_str[id] && doc_str[id]!=' ') id++;
+					while(cur_doc_str[id] &&cur_doc_str[id]!=' ') id++;
 					ld=id-ld;
 
 					unsigned int edit_dist=EditDistance(qword, lq, dword, ld,quer->match_dist);
@@ -253,28 +308,28 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 						matching_word=true;
 					}
 
-				while(doc_str[id] && !matching_word)
+				while(cur_doc_str[id] && !matching_word)
 				{
-					while(doc_str[id]==' ') id++;
-					if(!doc_str[id]) break;
+					while(cur_doc_str[id]==' ') id++;
+					if(!cur_doc_str[id]) break;
 
 					unsigned int num_mismatches=0;
 					int fail=false;
-					while(doc_str[id] && doc_str[id]!=' '&& *qw) {
-						if(*qw!=doc_str[id]) {
+					while(cur_doc_str[id] && cur_doc_str[id]!=' '&& *qw) {
+						if(*qw!=cur_doc_str[id]) {
 							num_mismatches++; 
 							if (quer->match_dist+1==num_mismatches){ fail=true; break;}
 						}
 						id++; qw++;
 					}
 					if(!*qw){ 
-						if (doc_str[id]!=' ' &&doc_str[id]) fail=true;
+						if (cur_doc_str[id]!=' ' &&cur_doc_str[id]) fail=true;
 					}
 					else
 						fail=true;
 
 					if(fail) 
-						while(doc_str[id] && doc_str[id]!=' ') id++;
+						while(cur_doc_str[id] && cur_doc_str[id]!=' ') id++;
 
 					qw=qword;
 					matching_word=!fail;
