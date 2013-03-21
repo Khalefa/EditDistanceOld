@@ -5,10 +5,20 @@
 #include <cstdlib>
 #include <cstdio>
 #include <vector>
+#include <bitset>
 #include <unordered_set>
+
 using namespace std;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
+int WordValue(const char * word, int lq){
+	int val=0;
+	for(int i=0;i<lq;i++)
+		val+=word[i]-'a';
+	
+	return val;
+}
+
 int strcmp_(const char* s1, const char* s2)
 {
 	while(*s1 && (*s1==*s2))
@@ -159,12 +169,16 @@ ErrorCode EndQuery(QueryID query_id)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
-
+//two ideas
+//remove from doc all non matched words
+//edit distancce
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
-	//	char cur_doc_str[MAX_DOC_LENGTH];
-	//	strcpy(cur_doc_str, doc_str);
-
+	char cur_doc_str[MAX_DOC_LENGTH];
+	strcpy(cur_doc_str, doc_str);
+	
+	bitset<(31-4)*26> f_mask;
+//	bitset<(31-4)*26> nf_mask;
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
 	//store found words
@@ -189,12 +203,13 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 				char qt=quer->str[iq];
 				quer->str[iq]=0;
 				lq=iq-lq;
-
-				if(not_found_words.find(qword)!=not_found_words.end()) {
-					matching_query=false;
-					quer->str[iq]=qt;
-					break;
-				}
+				int qval=WordValue(qword,lq);
+				//if(nf_mask[qval])
+					if(not_found_words.find(qword)!=not_found_words.end()) {
+						matching_query=false;
+						quer->str[iq]=qt;
+						break;
+					}
 				quer->str[iq]=qt;
 			}
 		}
@@ -211,15 +226,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			char qt=quer->str[iq];
 			quer->str[iq]=0;
 			lq=iq-lq;
-			/*
-			if(quer->match_type==MT_EXACT_MATCH) {
-				if(not_found_words.find(qword)!=not_found_words.end()) {
-					matching_query=false;
-					quer->str[iq]=qt;
-					break;
-				}
-			}
-			*/
+	
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
 				int id=0;
@@ -240,10 +247,11 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 				/* HAMMING or EXACT*/
 				int id=0;
 				char *qw=qword;
-
-				if(found_words.find(qword)!=found_words.end()) {
-					matching_word=true;
-				}
+				int qval=WordValue(qword,lq);
+				if(f_mask[qval]==1)
+					if(found_words.find(qword)!=found_words.end()) {
+						matching_word=true;
+					}
 
 				while(doc_str[id] && !matching_word)
 				{
@@ -270,8 +278,11 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 
 					qw=qword;
 					matching_word=!fail;
-					if(matching_word)
+					if(matching_word){
 						found_words.insert(qword);
+						f_mask.set(qval);
+	
+						}
 				}
 			}
 			//done with qword
@@ -283,6 +294,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 
 				if(quer->match_type==MT_EXACT_MATCH){
 					not_found_words.insert(qword);
+					//nf_mask.set(WordValue(qword,lq));
 				}
 			}
 			quer->str[iq]=qt;
