@@ -1,18 +1,20 @@
 
-#include "../include/core.h"
+#include "core.h"
 #include <cstring>
+#include <string>
 #include <cstdlib>
 #include <cstdio>
 #include <vector>
+#include <unordered_set>
 using namespace std;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 int strcmp_(const char* s1, const char* s2)
 {
-    while(*s1 && (*s1==*s2))
-        s1++,s2++;
-    if(*s1=='\0' && *s2==' ') return 0;
-    return *(const unsigned char*)s1-*(const unsigned char*)s2;
+	while(*s1 && (*s1==*s2))
+		s1++,s2++;
+	if(*s1=='\0' && *s2==' ') return 0;
+	return *(const unsigned char*)s1-*(const unsigned char*)s2;
 }
 
 int EditDistance(const char* a, int na, const char* b, int nb, int limit)
@@ -80,10 +82,10 @@ unsigned int HammingDistance(const char* a, int na, const char* b, int nb, int l
 {
 	int j, oo=0x7FFFFFFF;
 	if(na!=nb) return oo;
-	
+
 	unsigned int num_mismatches=0;
 	for(j=0;j<na;j++) if(a[j]!=b[j]) {num_mismatches++;if (num_mismatches==limit+1) return 100;}
-	
+
 	return num_mismatches;
 }
 
@@ -133,7 +135,7 @@ ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_ty
 	strcpy(query.str, query_str);
 	query.match_type=match_type;
 	query.match_dist=match_dist;
-//	printf("Q_id %d %d %d\n", query_id, match_type, match_dist);
+	//	printf("Q_id %d %d %d\n", query_id, match_type, match_dist);
 	// Add this query to the active query set
 	queries.push_back(query);
 	return EC_SUCCESS;
@@ -160,12 +162,14 @@ ErrorCode EndQuery(QueryID query_id)
 
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
-//	char cur_doc_str[MAX_DOC_LENGTH];
-//	strcpy(cur_doc_str, doc_str);
+	//	char cur_doc_str[MAX_DOC_LENGTH];
+	//	strcpy(cur_doc_str, doc_str);
 
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
-
+	//store found words
+	std::unordered_set<std::string> found_words;
+	std::unordered_set<std::string> not_found_words;
 	// Iterate on all active queries to compare them with this new document
 	for(i=0;i<n;i++)
 	{
@@ -185,6 +189,14 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			quer->str[iq]=0;
 			lq=iq-lq;
 
+			if(quer->match_type==MT_EXACT_MATCH) {
+				if(not_found_words.find(qword)!=not_found_words.end()) {
+					matching_query=false;
+					quer->str[iq]=qt;
+					break;
+				}
+			}
+
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
 				int id=0;
@@ -193,22 +205,22 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 					while(doc_str[id]==' ') id++;
 					if(!doc_str[id]) break;
 					const char* dword=&doc_str[id];
-	
+
 					int ld=id;
 					while(doc_str[id] && doc_str[id]!=' ') id++;
 					ld=id-ld;
-	
+
 					unsigned int edit_dist=EditDistance(qword, lq, dword, ld,quer->match_dist);
 					if(edit_dist<=quer->match_dist) matching_word=true;			
 				}
 			} else {
+				/* HAMMING or EXACT*/
 				int id=0;
 				char *qw=qword;
 				while(doc_str[id] && !matching_word)
 				{
 					while(doc_str[id]==' ') id++;
 					if(!doc_str[id]) break;
-					const char* dword=&doc_str[id];
 
 					unsigned int num_mismatches=0;
 					int fail=false;
@@ -217,32 +229,41 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 							num_mismatches++; 
 							if (quer->match_dist+1==num_mismatches){ fail=true; break;}
 						}
-							 id++; qw++;
+						id++; qw++;
 					}
-					if(!*qw) {
-						if (doc_str[id]!=' ' &&doc_str[id]!=0) fail=true;
-					} else
-					fail=true;
-					if(fail) while(doc_str[id] && doc_str[id]!=' ') id++;
+					if(!*qw){ 
+						if (doc_str[id]!=' ' &&doc_str[id]) fail=true;
+					}
+					else
+						fail=true;
+
+					if(fail) 
+						while(doc_str[id] && doc_str[id]!=' ') id++;
+
 					qw=qword;
 					matching_word=!fail;
 				}
 			}
-
-			quer->str[iq]=qt;
+			//done with qword
 
 			if(!matching_word)
 			{
 				// This query has a word that does not match any word in the document
 				matching_query=false;
+				
+				if(quer->match_type==MT_EXACT_MATCH){
+					not_found_words.insert(qword);
+				}
 			}
-		}
+			quer->str[iq]=qt;
+		}/*while(quer->str[iq] && matching_query)*/
 
 		if(matching_query)
 		{
 			// This query matches the document
 			query_ids.push_back(quer->query_id);
 		}
+
 	}
 
 	Document doc;
