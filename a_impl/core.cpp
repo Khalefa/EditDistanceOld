@@ -175,8 +175,31 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 	{
 		bool matching_query=true;
 		Query* quer=&queries[i];
-
+		//fail quickly if any word of query is in not_found
 		int iq=0;
+		if(quer->match_type==MT_EXACT_MATCH) {
+			while(quer->str[iq] && matching_query)
+			{
+				while(quer->str[iq]==' ') iq++;
+				if(!quer->str[iq]) break;
+				char* qword=&quer->str[iq];
+
+				int lq=iq;
+				while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+				char qt=quer->str[iq];
+				quer->str[iq]=0;
+				lq=iq-lq;
+
+				if(not_found_words.find(qword)!=not_found_words.end()) {
+					matching_query=false;
+					quer->str[iq]=qt;
+					break;
+				}
+				quer->str[iq]=qt;
+			}
+		}
+		if(!matching_query)continue;
+		iq=0;
 		while(quer->str[iq] && matching_query)
 		{
 			while(quer->str[iq]==' ') iq++;
@@ -188,7 +211,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			char qt=quer->str[iq];
 			quer->str[iq]=0;
 			lq=iq-lq;
-
+			/*
 			if(quer->match_type==MT_EXACT_MATCH) {
 				if(not_found_words.find(qword)!=not_found_words.end()) {
 					matching_query=false;
@@ -196,7 +219,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 					break;
 				}
 			}
-
+			*/
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
 				int id=0;
@@ -257,7 +280,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			{
 				// This query has a word that does not match any word in the document
 				matching_query=false;
-				
+
 				if(quer->match_type==MT_EXACT_MATCH){
 					not_found_words.insert(qword);
 				}
