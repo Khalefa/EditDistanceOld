@@ -11,6 +11,7 @@
 #include <algorithm>
 using namespace std;
 unordered_map<std::string,int> words;
+bitset<26> inital_letters;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 int WordValue(const char * word, int lq){
 	int val=0;
@@ -138,6 +139,14 @@ ErrorCode InitializeIndex(){return EC_SUCCESS;}
 
 ErrorCode DestroyIndex(){return EC_SUCCESS;}
 
+
+struct vector_less {
+	bool operator ()(Query const& a, Query const& b) const {
+		if (a.count > b.count) return true;
+		return false;
+	}
+};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_type, unsigned int match_dist)
@@ -247,41 +256,43 @@ bitset<32> QueryLength(){
 	}
 	return lengths;
 }
-
-void doc(char *doc_str){
+void doc(char * dst_doc, const char *doc_str){
 	float removed=0;
 	bitset<32> lengths=QueryLength();
+	initals();
 	int id=0;
+	int did=0;
 	while(doc_str[id] )
 	{
 		while(doc_str[id]==' ') id++;
 		if(!doc_str[id]) break;
 		int s_id=id;
 
-		int ld=id;
-		while(doc_str[id] && doc_str[id]!=' ') id++;
+		
+		while(doc_str[id] && doc_str[id]!=' '){id++; }
 
-		if(lengths[id-ld]==0)
+		if(lengths[id-s_id] && exist_initals(&doc_str[s_id]))
 		{//need to remove it
-			removed+=id-ld;
-			for(int i=s_id;i<ld;i++) doc_str[i]=0;
-		}
-	}
-	//printf("Removed %f %f\n",removed, removed/id);
-}
-struct vector_less {
-bool operator ()(Query const& a, Query const& b) const {
-        if (a.count > b.count) return true;
-        return false;
-    }
-};
+			//removed+=id-ld;
+			for(int i=s_id;i<=id;i++,did++) 
+				dst_doc[did]=doc_str[i];
 
+		} else removed+=id-s_id;
+	}
+	dst_doc[did]='\0';
+//	printf("Removed %f %f\n",removed, removed/id*100);
+}
+
+int exist_initals(const char *a){
+	if(inital_letters[a[0]-'a'] || inital_letters[a[1]-'a']|| inital_letters[a[2]-'a']|| inital_letters[a[3]-'a']) return true;
+	return false;
+}
 void printQueries(){
 	unsigned int i, n=queries.size();
 	printf("Queries LIST\n");
 	for(i=0;i<n;i++){
-	Query* q=&queries[i];
-	printf("Q_id %d count %d\n", q->query_id, q->count);
+		Query* q=&queries[i];
+		printf("Q_id %d count %d\n", q->query_id, q->count);
 
 	}
 	printf("\n");
@@ -290,7 +301,10 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
 	char cur_doc_str[MAX_DOC_LENGTH];
 	strcpy(cur_doc_str, doc_str);
-	doc(cur_doc_str);
+	std::sort(queries.begin(), queries.end(),vector_less());
+
+//	doc(cur_doc_str,doc_str);
+//	if(doc_id==3)	printf("%s\n",cur_doc_str);
 	bitset<32> query_length=QueryLength();	
 	bitset<(31-4)*26> f_mask;
 
@@ -298,7 +312,6 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 	vector<unsigned int> query_ids;
 	std::unordered_set<std::string> found_words;
 	std::unordered_set<std::string> not_found_words;
-	std::sort(queries.begin(), queries.end(),vector_less());
 
 	//printQueries();
 	// Iterate on all active queries to compare them with this new document
@@ -422,7 +435,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 		}
 
 	}
-		sort(query_ids.begin(), query_ids.end());
+	sort(query_ids.begin(), query_ids.end());
 	Document doc;
 	doc.doc_id=doc_id;
 	doc.num_res=query_ids.size();
@@ -448,3 +461,28 @@ ErrorCode GetNextAvailRes(DocID* p_doc_id, unsigned int* p_num_res, QueryID** p_
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void initals(){
+	inital_letters.reset();
+
+	int i, n=queries.size();
+	for(i=0;i<n;i++)
+	{
+		Query* quer=&queries[i];
+		int iq=0;
+
+		while(quer->str[iq])
+		{
+			while(quer->str[iq]==' ') iq++;
+			if(!quer->str[iq]) break;
+			int lq=iq;
+			while(quer->str[iq] && quer->str[iq]!=' '){ 
+				if(iq-lq<=4) inital_letters.set(quer->str[iq]-'a');
+				iq++;
+			
+			}
+
+		}
+	}
+}
