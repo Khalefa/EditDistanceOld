@@ -7,15 +7,16 @@
 #include <vector>
 #include <bitset>
 #include <unordered_set>
-
+#include <unordered_map>
+#include <algorithm>
 using namespace std;
-
+unordered_map<std::string,int> words;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 int WordValue(const char * word, int lq){
 	int val=0;
 	for(int i=0;i<lq;i++)
 		val+=word[i]-'a';
-	
+
 	return val;
 }
 
@@ -108,6 +109,7 @@ struct Query
 	char str[MAX_QUERY_LENGTH];
 	MatchType match_type;
 	unsigned int match_dist;
+	int count;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -146,8 +148,27 @@ ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_ty
 	query.match_type=match_type;
 	query.match_dist=match_dist;
 	//	printf("Q_id %d %d %d\n", query_id, match_type, match_dist);
+	//check if the words are new
+	int count=0;
+	int iq=0;
+	while(query.str[iq] )
+	{
+		while(query.str[iq]==' ') iq++;
+		if(!query.str[iq]) break;
+		char* qword=&query.str[iq];
+
+		int lq=iq;
+		while(query.str[iq] && query.str[iq]!=' ') iq++;
+		char qt=query.str[iq];
+		query.str[iq]=0;
+		lq=iq-lq;
+		count=++words[qword];
+		query.str[iq]=qt;
+	}
+	query.count=count;
 	// Add this query to the active query set
 	queries.push_back(query);
+
 	return EC_SUCCESS;
 }
 
@@ -161,6 +182,27 @@ ErrorCode EndQuery(QueryID query_id)
 	{
 		if(queries[i].query_id==query_id)
 		{
+			Query *query=&queries[i];
+
+			int iq=0;
+			while(query->str[iq]){
+				while(query->str[iq]==' ') iq++;
+				if(!query->str[iq]) break;
+				char* qword=&query->str[iq];
+
+				int lq=iq;
+				while(query->str[iq] && query->str[iq]!=' ') iq++;
+				char qt=query->str[iq];
+				query->str[iq]=0;
+				lq=iq-lq;
+				int l=words[qword]--;
+				if(l==0)  {
+					words.erase (qword);        
+				}
+				query->str[iq]=qt;
+			}
+
+
 			queries.erase(queries.begin()+i);
 			break;
 		}
@@ -225,7 +267,24 @@ void doc(char *doc_str){
 			for(int i=s_id;i<ld;i++) doc_str[i]=0;
 		}
 	}
-//printf("Removed %f %f\n",removed, removed/id);
+	//printf("Removed %f %f\n",removed, removed/id);
+}
+struct vector_less {
+bool operator ()(Query const& a, Query const& b) const {
+        if (a.count > b.count) return true;
+        return false;
+    }
+};
+
+void printQueries(){
+	unsigned int i, n=queries.size();
+	printf("Queries LIST\n");
+	for(i=0;i<n;i++){
+	Query* q=&queries[i];
+	printf("Q_id %d count %d\n", q->query_id, q->count);
+
+	}
+	printf("\n");
 }
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
@@ -234,12 +293,14 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 	doc(cur_doc_str);
 	bitset<32> query_length=QueryLength();	
 	bitset<(31-4)*26> f_mask;
-	
+
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
-	//store found words
 	std::unordered_set<std::string> found_words;
 	std::unordered_set<std::string> not_found_words;
+	std::sort(queries.begin(), queries.end(),vector_less());
+
+	//printQueries();
 	// Iterate on all active queries to compare them with this new document
 	for(i=0;i<n;i++)
 	{
@@ -260,11 +321,11 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 				quer->str[iq]=0;
 				lq=iq-lq;
 				int qval=WordValue(qword,lq);
-					if(not_found_words.find(qword)!=not_found_words.end()) {
-						matching_query=false;
-						quer->str[iq]=qt;
-						break;
-					}
+				if(not_found_words.find(qword)!=not_found_words.end()) {
+					matching_query=false;
+					quer->str[iq]=qt;
+					break;
+				}
 				quer->str[iq]=qt;
 			}
 		}
@@ -281,7 +342,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			char qt=quer->str[iq];
 			quer->str[iq]=0;
 			lq=iq-lq;
-	
+
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
 				int id=0;
@@ -308,37 +369,36 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 						matching_word=true;
 					}
 
-				while(cur_doc_str[id] && !matching_word)
-				{
-					while(cur_doc_str[id]==' ') id++;
-					if(!cur_doc_str[id]) break;
+					while(cur_doc_str[id] && !matching_word) {
+						while(cur_doc_str[id]==' ') id++;
+						if(!cur_doc_str[id]) break;
 
-					unsigned int num_mismatches=0;
-					int fail=false;
-					while(cur_doc_str[id] && cur_doc_str[id]!=' '&& *qw) {
-						if(*qw!=cur_doc_str[id]) {
-							num_mismatches++; 
-							if (quer->match_dist+1==num_mismatches){ fail=true; break;}
+						unsigned int num_mismatches=0;
+						int fail=false;
+						while(cur_doc_str[id] && cur_doc_str[id]!=' '&& *qw) {
+							if(*qw!=cur_doc_str[id]) {
+								num_mismatches++; 
+								if (quer->match_dist+1==num_mismatches){ fail=true; break;}
+							}
+							id++; qw++;
 						}
-						id++; qw++;
-					}
-					if(!*qw){ 
-						if (cur_doc_str[id]!=' ' &&cur_doc_str[id]) fail=true;
-					}
-					else
-						fail=true;
-
-					if(fail) 
-						while(cur_doc_str[id] && cur_doc_str[id]!=' ') id++;
-
-					qw=qword;
-					matching_word=!fail;
-					if(matching_word){
-						found_words.insert(qword);
-						f_mask.set(qval);
-	
+						if(!*qw){ 
+							if (cur_doc_str[id]!=' ' &&cur_doc_str[id]) fail=true;
 						}
-				}
+						else
+							fail=true;
+
+						if(fail) 
+							while(cur_doc_str[id] && cur_doc_str[id]!=' ') id++;
+
+						qw=qword;
+						matching_word=!fail;
+						if(matching_word&& quer->match_type==MT_EXACT_MATCH){
+							found_words.insert(qword);
+							f_mask.set(qval);
+
+						}
+					}
 			}
 			//done with qword
 
@@ -362,7 +422,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 		}
 
 	}
-
+		sort(query_ids.begin(), query_ids.end());
 	Document doc;
 	doc.doc_id=doc_id;
 	doc.num_res=query_ids.size();
