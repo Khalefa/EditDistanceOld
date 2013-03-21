@@ -1,29 +1,3 @@
-/*
- * core.cpp version 1.0
- * Copyright (c) 2013 KAUST - InfoCloud Group (All Rights Reserved)
- * Author: Amin Allam
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
 
 #include "../include/core.h"
 #include <cstring>
@@ -41,7 +15,7 @@ int strcmp_(const char* s1, const char* s2)
     return *(const unsigned char*)s1-*(const unsigned char*)s2;
 }
 
-int EditDistance(const char* a, int na, const char* b, int nb)
+int EditDistance(const char* a, int na, const char* b, int nb, int limit)
 {
 	int oo=10;
 	int diff=nb-na;
@@ -89,7 +63,7 @@ int EditDistance(const char* a, int na, const char* b, int nb)
 			if(ret<min)min=ret;
 			T[cur][ib]=ret;
 		}
-		if(min>3) return min+1;
+		if(min>limit) return limit+1;
 		cur=1-cur;
 	}
 
@@ -159,6 +133,7 @@ ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_ty
 	strcpy(query.str, query_str);
 	query.match_type=match_type;
 	query.match_dist=match_dist;
+//	printf("Q_id %d %d %d\n", query_id, match_type, match_dist);
 	// Add this query to the active query set
 	queries.push_back(query);
 	return EC_SUCCESS;
@@ -211,37 +186,47 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			lq=iq-lq;
 
 			bool matching_word=false;
-
-			int id=0;
-			while(doc_str[id] && !matching_word)
-			{
-				while(doc_str[id]==' ') id++;
-				if(!doc_str[id]) break;
-				const char* dword=&doc_str[id];
-
-				int ld=id;
-				while(doc_str[id] && doc_str[id]!=' ') id++;
-				char dt=doc_str[id];
-				//cur_doc_str[id]=0;
-
-				ld=id-ld;
-
-				/*if(quer->match_type==MT_EXACT_MATCH )
+			if (quer->match_type==MT_EDIT_DIST) {
+				int id=0;
+				while(doc_str[id] && !matching_word)
 				{
-					if(strcmp_(qword, dword)==0) matching_word=true;
+					while(doc_str[id]==' ') id++;
+					if(!doc_str[id]) break;
+					const char* dword=&doc_str[id];
+	
+					int ld=id;
+					while(doc_str[id] && doc_str[id]!=' ') id++;
+					ld=id-ld;
+	
+					unsigned int edit_dist=EditDistance(qword, lq, dword, ld,quer->match_dist);
+					if(edit_dist<=quer->match_dist) matching_word=true;			
 				}
-				else*/ if(quer->match_type==MT_HAMMING_DIST || quer->match_type==MT_EXACT_MATCH)
+			} else {
+				int id=0;
+				char *qw=qword;
+				while(doc_str[id] && !matching_word)
 				{
-					unsigned int num_mismatches=HammingDistance(qword, lq, dword, ld,quer->match_dist);
-					if(num_mismatches<=quer->match_dist) matching_word=true;
-				}
-				else if(quer->match_type==MT_EDIT_DIST)
-				{
-					unsigned int edit_dist=EditDistance(qword, lq, dword, ld);
-					if(edit_dist<=quer->match_dist) matching_word=true;
-				}
+					while(doc_str[id]==' ') id++;
+					if(!doc_str[id]) break;
+					const char* dword=&doc_str[id];
 
-//				cur_doc_str[id]=dt;
+					unsigned int num_mismatches=0;
+					int fail=false;
+					while(doc_str[id] && doc_str[id]!=' '&& *qw) {
+						if(*qw!=doc_str[id]) {
+							num_mismatches++; 
+							if (quer->match_dist+1==num_mismatches){ fail=true; break;}
+						}
+							 id++; qw++;
+					}
+					if(!*qw) {
+						if (doc_str[id]!=' ' &&doc_str[id]!=0) fail=true;
+					} else
+					fail=true;
+					if(fail) while(doc_str[id] && doc_str[id]!=' ') id++;
+					qw=qword;
+					matching_word=!fail;
+				}
 			}
 
 			quer->str[iq]=qt;
