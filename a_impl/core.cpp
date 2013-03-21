@@ -217,6 +217,11 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 				/* HAMMING or EXACT*/
 				int id=0;
 				char *qw=qword;
+
+				if(found_words.find(qword)!=found_words.end()) {
+					matching_word=true;
+				}
+
 				while(doc_str[id] && !matching_word)
 				{
 					while(doc_str[id]==' ') id++;
@@ -242,6 +247,8 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 
 					qw=qword;
 					matching_word=!fail;
+					if(matching_word)
+						found_words.insert(qword);
 				}
 			}
 			//done with qword
