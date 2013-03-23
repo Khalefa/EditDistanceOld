@@ -147,6 +147,7 @@ ErrorCode DestroyIndex(){return EC_SUCCESS;}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 trie QTrie;
+trie WTrie;
 unordered_set<string> words;
 
 void MakeQueryTrie(){
@@ -178,7 +179,35 @@ void MakeQueryTrie(){
 		}	
 	}
 }
+/*void MakeWordTrie(const char *doc_str){
+	WTrie.free();
+	int id=0;
+	for(i=0;i<n;i++)
+	{
+		Query* quer=&queries[i];
+		int iq=0;
+		while(quer->str[iq])
+		{
+			while(quer->str[iq]==' ') iq++;
+			if(!quer->str[iq]) break;
+			char* qword=&quer->str[iq];
 
+			int lq=iq;
+			while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+			char qt=quer->str[iq];
+			quer->str[iq]=0;
+			lq=iq-lq;
+			if(quer->match_type==MT_EXACT_MATCH){
+
+				words.insert(qword);;
+			}
+			else
+				QTrie.insert(qword);
+			quer->str[iq]=qt;
+		}	
+	}
+}
+*/
 ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_type, unsigned int match_dist)
 {
 	Query query;
@@ -224,7 +253,9 @@ void RemoveNonMAtchedWords(DocID doc_id,char *dst_doc, const char *doc_str){
 		word[id-s_id]=0;
 		string w(word);
 		//		if (		printf("
-		if((search(QTrie, w,3)<=3)||(words.find(word)!=words.end()))
+		int cond=words.find(word)!=words.end();
+		if(!cond)cond=search(QTrie, w,3)<=3;
+		if(cond)
 		{
 			for(int i=s_id;i<=id;i++,did++) 
 				dst_doc[did]=doc_str[i];
