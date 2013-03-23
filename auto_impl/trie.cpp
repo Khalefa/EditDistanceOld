@@ -1,10 +1,4 @@
-#include <iostream>
-#include <map>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <cctype>
- 
+#include "trie.h"
 /*
  * Algorithm: Edit distance using a trie-tree (Dynamic Programming)
  * Author: Murilo Adriano Vasconcelos <muriloufg@gmail.com>
@@ -12,49 +6,16 @@
  
 using namespace std;
  
-// Trie's node
-struct trie
-{
-    typedef map<char, trie*> next_t;
- 
-    // The set with all the letters which this node is prefix
-    next_t next;
- 
-    // If word is equal to "" is because there is no word in the
-    //  dictionary which ends here.
-    string word;
- 
-    trie() : next(map<char, trie*>()) {}
- 
-    void insert(string w)
-    {
-        w = string("$") + w;
-         
-        int sz = w.size();
-         
-        trie* n = this;
-        for (int i = 0; i < sz; ++i) {
-            if (n->next.find(w[i]) == n->next.end()) {
-                n->next[w[i]] = new trie();
-            }
- 
-            n = n->next[w[i]];
-        }
- 
-        n->word = w;
-    }
-};
- 
-// The tree
-trie tree;
+
  
 // The minimum cost of a given word to be changed to a word of the dictionary
-int min_cost;
+//extern int min_cost;
  
 //
-void search_impl(trie* tree, char ch, vector<int> last_row, const string& word)
+extern "C"  void search_impl(trie* tree, char ch, vector<int> last_row, const string& word, int &min_cost, int limit)
 {
-    int sz = last_row.size();
+	
+	int sz = last_row.size();
  
     vector<int> current_row(sz);
     current_row[0] = last_row[0] + 1;
@@ -76,19 +37,25 @@ void search_impl(trie* tree, char ch, vector<int> last_row, const string& word)
  
     // If there is an element wich is smaller than the current minimum cost,
     //  we can have another cost smaller than the current minimum cost
-    if (*min_element(current_row.begin(), current_row.end()) < min_cost) {
+	int min=*min_element(current_row.begin(), current_row.end());
+    
+		if(limit < min)
+		{
+			//printf("Give up");
+		}
+		else 
         for (trie::next_t::iterator it = tree->next.begin(); it != tree->next.end(); ++it) {
-            search_impl(it->second, it->first, current_row, word);
+			search_impl(it->second, it->first, current_row, word, min_cost,limit);
         }
-    }
+    
 }
  
-int search(string word)
+extern "C" int search(trie tree,string word, int limit)
 {
     word = string("$") + word;
      
     int sz = word.size();
-    min_cost = 0x3f3f3f3f;
+	int    min_cost = 0x3f3f3f3f;
  
     vector<int> current_row(sz + 1);
  
@@ -97,14 +64,16 @@ int search(string word)
     current_row[sz] = sz;
      
      
-     
     // For each letter in the root map wich matches with a
     //  letter in word, we must call the search
     for (int i = 0 ; i < sz; ++i) {
         if (tree.next.find(word[i]) != tree.next.end()) {
-            search_impl(tree.next[word[i]], word[i], current_row, word);
+			search_impl(tree.next[word[i]], word[i], current_row, word, min_cost,limit);
+		if(limit > min_cost) 
+				return min_cost;
         }
     }
- 
+ //   printf(" word %s %d", word,min_cost);
+//cout << "word" << word << " "<<min_cost <<endl;
     return min_cost;
 }

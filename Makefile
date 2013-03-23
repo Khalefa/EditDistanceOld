@@ -29,14 +29,14 @@
 
 # Build targets (your implementation targets should go in IMPL_O)
 TEST_O=test_driver/test.o 
-IMPL_O=a_impl/core.o
+IMPL_O=auto_impl/core.o auto_impl/trie.o
 
 # Compiler flags
 CC  = g++
 CXX = g++
-CFLAGS=-O3 -fPIC -Wall -std=gnu++0x -g -I. -I./include
+CFLAGS= -O3 -pg -fPIC -Wall -std=gnu++0x  -I. -I./include 
 CXXFLAGS=$(CFLAGS)
-LDFLAGS=-lpthread
+#LDFLAGS=-lpthread
 
 # The programs that will be built
 PROGRAMS=testdriver

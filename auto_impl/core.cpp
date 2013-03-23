@@ -1,35 +1,38 @@
 /*
- * core.cpp version 1.0
- * Copyright (c) 2013 KAUST - InfoCloud Group (All Rights Reserved)
- * Author: Amin Allam
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
+* core.cpp version 1.0
+* Copyright (c) 2013 KAUST - InfoCloud Group (All Rights Reserved)
+* Author: Amin Allam
+*
+* Permission is hereby granted, free of charge, to any person
+* obtaining a copy of this software and associated documentation
+* files (the "Software"), to deal in the Software without
+* restriction, including without limitation the rights to use,
+* copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following
+* conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+* OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+* HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+* WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE.
+*/
 
 #include "../include/core.h"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
 #include <vector>
+#include "trie.h"
+#include <unordered_set>
+
 using namespace std;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,10 +101,10 @@ unsigned int HammingDistance(char* a, int na, char* b, int nb)
 {
 	int j, oo=0x7FFFFFFF;
 	if(na!=nb) return oo;
-	
+
 	unsigned int num_mismatches=0;
 	for(j=0;j<na;j++) if(a[j]!=b[j]) num_mismatches++;
-	
+
 	return num_mismatches;
 }
 
@@ -133,7 +136,7 @@ vector<Query> queries;
 
 // Keeps all currently available results that has not been returned yet
 vector<Document> docs;
-
+//vector<string> words;
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 ErrorCode InitializeIndex(){return EC_SUCCESS;}
@@ -143,6 +146,38 @@ ErrorCode InitializeIndex(){return EC_SUCCESS;}
 ErrorCode DestroyIndex(){return EC_SUCCESS;}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
+trie QTrie;
+unordered_set<string> words;
+
+void MakeQueryTrie(){
+	QTrie.free();
+	words.clear();
+	int i,n=queries.size();
+	for(i=0;i<n;i++)
+	{
+		Query* quer=&queries[i];
+		int iq=0;
+		while(quer->str[iq])
+		{
+			while(quer->str[iq]==' ') iq++;
+			if(!quer->str[iq]) break;
+			char* qword=&quer->str[iq];
+
+			int lq=iq;
+			while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+			char qt=quer->str[iq];
+			quer->str[iq]=0;
+			lq=iq-lq;
+			if(quer->match_type==MT_EXACT_MATCH){
+
+				words.insert(qword);;
+			}
+			else
+				QTrie.insert(qword);
+			quer->str[iq]=qt;
+		}	
+	}
+}
 
 ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_type, unsigned int match_dist)
 {
@@ -173,12 +208,41 @@ ErrorCode EndQuery(QueryID query_id)
 	return EC_SUCCESS;
 }
 
+void RemoveNonMAtchedWords(DocID doc_id,char *dst_doc, const char *doc_str){
+	char word[31];
+	float removed=0;
+	int id=0;
+	int did=0;
+	while(doc_str[id] )
+	{
+		while(doc_str[id]==' ') id++;
+		if(!doc_str[id]) break;
+		int s_id=id;
+
+
+		while(doc_str[id] && doc_str[id]!=' '){ word[id-s_id]=doc_str[id]; id++; }
+		word[id-s_id]=0;
+		string w(word);
+		//		if (		printf("
+		if((search(QTrie, w,3)<=3)||(words.find(word)!=words.end()))
+		{
+			for(int i=s_id;i<=id;i++,did++) 
+				dst_doc[did]=doc_str[i];
+
+		} else removed+=id-s_id;
+	}
+	dst_doc[did]='\0';
+	printf("Removed %f %f\n",removed, removed/id*100);
+	//if(doc_id==1) printf("\n\n\n\n\n\n PRINTING %s \n\n\n\n\n\n",dst_doc);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
 	char cur_doc_str[MAX_DOC_LENGTH];
-	strcpy(cur_doc_str, doc_str);
+	MakeQueryTrie();
+	RemoveNonMAtchedWords(doc_id,cur_doc_str, doc_str);
 
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
