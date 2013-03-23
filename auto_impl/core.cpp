@@ -292,7 +292,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 
 				string w(word);	
 				if((doc_id==1)&& (quer->query_id==9))cout << w << " "<< search(WTrie, w,3,quer->match_type== MT_EDIT_DIST) << '\n';
-				if (search(WTrie, w,3, quer->match_type== MT_EDIT_DIST)<=quer->match_dist)
+				if (search(WTrie, w,quer->match_dist, quer->match_type== MT_EDIT_DIST)<=quer->match_dist)
 					matching_word=true;	
 
 			if(!matching_word)
