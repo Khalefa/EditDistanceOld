@@ -76,9 +76,9 @@ struct trie
  
 // The minimum cost of a given word to be changed to a word of the dictionary
 //
-void search_impl(trie* tree, char ch, vector<int> last_row, const string& word, int &min,int limit);
+void search_impl(trie* tree, char ch, vector<int> last_row, const string& word, int &min,int limit, int insert_del);
 
-int search(trie tree,string word, int limit);
+int search(trie tree,string word, int limit, int insert_del);
 
 
 

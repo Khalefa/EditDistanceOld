@@ -12,7 +12,7 @@ using namespace std;
 //extern int min_cost;
  
 //
-extern "C"  void search_impl(trie* tree, char ch, vector<int> last_row, const string& word, int &min_cost, int limit)
+extern "C"  void search_impl(trie* tree, char ch, vector<int> last_row, const string& word, int &min_cost, int limit, int insert_del)
 {
 	
 	int sz = last_row.size();
@@ -23,7 +23,8 @@ extern "C"  void search_impl(trie* tree, char ch, vector<int> last_row, const st
     // Calculate the min cost of insertion, deletion, match or substution
     int insert_or_del, replace;
     for (int i = 1; i < sz; ++i) {
-        insert_or_del = min(current_row[i-1] + 1, last_row[i] + 1);
+        if(insert_del) insert_or_del = min(current_row[i-1] + 1, last_row[i] + 1);
+			else insert_or_del=1000;
         replace = (word[i-1] == ch) ? last_row[i-1] : (last_row[i-1] + 1);
  
         current_row[i] = min(insert_or_del, replace);
@@ -45,12 +46,12 @@ extern "C"  void search_impl(trie* tree, char ch, vector<int> last_row, const st
 		}
 		else 
         for (trie::next_t::iterator it = tree->next.begin(); it != tree->next.end(); ++it) {
-			search_impl(it->second, it->first, current_row, word, min_cost,limit);
+			search_impl(it->second, it->first, current_row, word, min_cost,limit, insert_del);
         }
     
 }
  
-extern "C" int search(trie tree,string word, int limit)
+extern "C" int search(trie tree,string word, int limit, int insert_del)
 {
     word = string("$") + word;
      
@@ -68,7 +69,7 @@ extern "C" int search(trie tree,string word, int limit)
     //  letter in word, we must call the search
     for (int i = 0 ; i < sz; ++i) {
         if (tree.next.find(word[i]) != tree.next.end()) {
-			search_impl(tree.next[word[i]], word[i], current_row, word, min_cost,limit);
+			search_impl(tree.next[word[i]], word[i], current_row, word, min_cost,limit, insert_del);
 		if(limit > min_cost) 
 				return min_cost;
         }
