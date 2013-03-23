@@ -32,6 +32,7 @@
 #include <vector>
 #include "trie.h"
 #include <unordered_set>
+#include <bitset>
 
 using namespace std;
 
@@ -149,10 +150,90 @@ ErrorCode DestroyIndex(){return EC_SUCCESS;}
 trie QTrie;
 trie WTrie;
 unordered_set<string> words;
+typedef vector<bitset<26>> masks_v;
+masks_v masks;
+vector<int> distances;
+vector<int> lengths;
+//given a word 
 
+
+bitset<26> WordMask(char * str){
+bitset<26> mask;
+int id=0;
+while(str[id]){
+	mask.set(str[id]-'a');
+	id++;
+}
+return mask;
+}
+int MayMatch(bitset<26> &m1,bitset<26> &m2, int dist ){
+	bitset<26> intersect=m1 & m2;
+	int diff=m1.count()-intersect.count();
+	if (diff<=dist) return 1;
+	else return 0;
+}
+int DMayMatch(char *word, int lw, int dist, int exact_length){
+	bitset<26> wmask=WordMask(word);
+	int i=0;
+	for(masks_v::iterator it=masks.begin(); it!=masks.end();it++,i++)
+	{
+		if(MayMatch(wmask,*it,dist)){
+		  int diff_length=lw-lengths[i];
+		 if(exact_length&& diff_length!=0) continue;
+		  if(diff_length<0)diff_length=-diff_length;
+		  if(diff_length<=dist)return 1;
+		}
+	}
+	return 0;
+}
+
+int QMayMatch(char *word, int lw){
+bitset<26> wmask=WordMask(word);
+int i=0;
+for(masks_v::iterator it=masks.begin(); it!=masks.end();it++,i++)
+	{
+		if(MayMatch(wmask,*it,distances[i])){ 
+		  int diff_length=lw-lengths[i];
+		  if(diff_length<0)diff_length=-diff_length;
+		  if(diff_length<=distances[i])return 1;
+		}
+	}
+return 0;
+}
+
+/*void BuildQMasks(){
+	masks.clear();
+	distances.clear();
+	lengths.clear();
+	int i,n=queries.size();
+	for(i=0;i<n;i++)
+	{
+		Query* quer=&queries[i];
+		int iq=0;
+		while(quer->str[iq])
+		{
+			while(quer->str[iq]==' ') iq++;
+			if(!quer->str[iq]) break;
+			char* qword=&quer->str[iq];
+
+			int lq=iq;
+			while(quer->str[iq] && quer->str[iq]!=' ') iq++;
+			char qt=quer->str[iq];
+			quer->str[iq]=0;
+			lq=iq-lq;
+			masks.push_back(WordMask(qword));
+			distances.push_back(quer->match_dist);
+			lengths.push_back(lq);
+			quer->str[iq]=qt;
+		}	
+	}
+
+}
+*/
 void MakeQueryTrie(){
 	QTrie.free();
 	words.clear();
+	
 	int i,n=queries.size();
 	for(i=0;i<n;i++)
 	{
@@ -181,10 +262,13 @@ void MakeQueryTrie(){
 }
 void MakeWordTrie(const char *doc_str){
 	WTrie.free();
+	masks.clear();
+	lengths.clear();
 	int id=0;
 	char word[31];
 	float removed=0;
 	int did=0;
+//	BuildQMasks();
 	while(doc_str[id] )
 	{
 		while(doc_str[id]==' ') id++;
@@ -194,9 +278,15 @@ void MakeWordTrie(const char *doc_str){
 		while(doc_str[id] && doc_str[id]!=' '){ word[id-s_id]=doc_str[id]; id++; }
 		word[id-s_id]=0;
 		//string w(word);
+//		if(MayMatch(word,id-s_id))
 		WTrie.insert(word);
+		masks.push_back(WordMask(word));
+	        lengths.push_back(id-s_id);
+		
+//		else removed+=id-s_id;
 
 	}	
+//	printf("Removed %d %f\n",(int)removed,removed/id*100);
 }
 
 ErrorCode StartQuery(QueryID query_id, const char* query_str, MatchType match_type, unsigned int match_dist)
@@ -263,6 +353,8 @@ void RemoveNonMAtchedWords(DocID doc_id,char *dst_doc, const char *doc_str){
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
 	char cur_doc_str[MAX_DOC_LENGTH];
+	int count=0;
+	int total=0;
 //	MakeQueryTrie();
 //	RemoveNonMAtchedWords(doc_id,cur_doc_str, doc_str);
 	MakeWordTrie(doc_str);
@@ -290,10 +382,14 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 
 			bool matching_word=false;
 
-				string w(word);	
-				if((doc_id==1)&& (quer->query_id==9))cout << w << " "<< search(WTrie, w,3,quer->match_type== MT_EDIT_DIST) << '\n';
-				if (search(WTrie, w,quer->match_dist, quer->match_type== MT_EDIT_DIST)<=quer->match_dist)
+			string w(word);	
+			//if((doc_id==1)&& (quer->query_id==9))cout << w << " "<< search(WTrie, w,3,quer->match_type== MT_EDIT_DIST) << '\n';
+			total++;
+			if(DMayMatch(word, iq-lq, quer->match_dist, quer->match_type!= MT_EDIT_DIST)){
+			count++;	
+			if (search(WTrie, w,quer->match_dist, quer->match_type== MT_EDIT_DIST)<=quer->match_dist)
 					matching_word=true;	
+			}
 
 			if(!matching_word)
 			{
@@ -308,7 +404,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			query_ids.push_back(quer->query_id);
 		}
 	}
-
+	printf("doc_od %d Filter (%f)\n",doc_id,(float)count/total);
 	Document doc;
 	doc.doc_id=doc_id;
 	doc.num_res=query_ids.size();
