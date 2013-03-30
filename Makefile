@@ -29,7 +29,7 @@
 
 # Build targets (your implementation targets should go in IMPL_O)
 TEST_O=test_driver/test.o 
-IMPL_O=a_impl/core.o
+IMPL_O=a_impl/core.o a_impl/gram.o
 
 # Compiler flags
 CC  = g++
