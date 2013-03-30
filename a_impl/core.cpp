@@ -19,7 +19,7 @@ int strcmp_(const char* s1, const char* s2)
 	if(*s1=='\0' && *s2==' ') return 0;
 	return *(const unsigned char*)s1-*(const unsigned char*)s2;
 }
-/*******************
+/*******************/
 int min(int a, int b, int c){
 int m=(a>b)?b:a;
 m=(c>m)?m:c;
@@ -40,7 +40,7 @@ c=H[i];H[i]=e;
 }
 while (H[top] >k)  top--;
 if (top == nb ) 
-return H[top];//k-1;
+return j;//k-1;
 
 else top++;
 }
@@ -54,8 +54,8 @@ if(diff>k) return 100;
 if(na>nb) 
 return	editDistance(a, na, b,nb,  k);
 else return editDistance(b, nb, a,na,  k);
-}*/
-int EditDistance(const char* a, int na, const char* b, int nb, int limit)
+}
+int oldEditDistance(const char* a, int na, const char* b, int nb, int limit)
 {
 	int oo=10;
 	int diff=nb-na;
