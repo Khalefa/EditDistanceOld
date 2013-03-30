@@ -3,6 +3,9 @@
 #include <cstring>
 #include <string>
 #include <cstdlib>
+#include <utility>
+#include <iostream>
+
 #include <cstdio>
 #include <vector>
 #include <unordered_set>
@@ -16,13 +19,48 @@ int strcmp_(const char* s1, const char* s2)
 	if(*s1=='\0' && *s2==' ') return 0;
 	return *(const unsigned char*)s1-*(const unsigned char*)s2;
 }
+/*******************
+int min(int a, int b, int c){
+int m=(a>b)?b:a;
+m=(c>m)?m:c;
+return m;
+}
+int editDistance(const char *a, int na, const char * b, int nb, int k) {
+int oo=10;
 
+static int H[31+1];
+int top = k +1;
+for (int i=0;i<=nb;i++)  H[i] = i;	
+for(int j=1;j<=na;j++){
+int  c = 0;
+for(int i=1;i<=top;i++){
+int e=c;
+if(a[i-1]!=b[j-1]) e=min(H[i-1], H[i], c)+1;
+c=H[i];H[i]=e;
+}
+while (H[top] >k)  top--;
+if (top == nb ) 
+return H[top];//k-1;
+
+else top++;
+}
+return oo;
+}
+int EditDistance(const char *a, int na, const char * b, int nb, int k) {
+int diff=nb-na;
+if (diff<0) diff=-diff;
+if(diff>k) return 100;
+
+if(na>nb) 
+return	editDistance(a, na, b,nb,  k);
+else return editDistance(b, nb, a,na,  k);
+}*/
 int EditDistance(const char* a, int na, const char* b, int nb, int limit)
 {
 	int oo=10;
 	int diff=nb-na;
 	if (diff<0) diff=-diff;
-	if(diff>3 ) return 4;
+	if(diff>limit ) return limit+1;
 
 	static int T[2][MAX_WORD_LENGTH+1];
 
@@ -159,17 +197,40 @@ ErrorCode EndQuery(QueryID query_id)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
-
+int cmp(const char *a, const char *b, int l, int dist){
+	int num_mismatches=0;
+	int fail=false;
+	for(int i=0;i<l;i++) {
+		if(a[i]!=b[i]) {
+			num_mismatches++; 
+			if (dist+1==num_mismatches){ fail=true; break;}
+		}
+	}
+	return !fail;
+}
+void GetWords(const char *doc_str, unordered_set<string> &words){
+	int id=0;
+	char word[31];
+	while(doc_str[id]) {
+		while(doc_str[id]==' ') id++;
+		if(!doc_str[id]) break;
+		int ld=id;
+		while(doc_str[id] && doc_str[id]!=' '){word[id-ld]=doc_str[id]; id++;}
+		word[id-ld]=0;
+		ld=id-ld;
+		words.insert(word);
+	}
+}
 ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 {
-	//	char cur_doc_str[MAX_DOC_LENGTH];
-	//	strcpy(cur_doc_str, doc_str);
-
 	unsigned int i, n=queries.size();
 	vector<unsigned int> query_ids;
 	//store found words
-	std::unordered_set<std::string> found_words;
-	std::unordered_set<std::string> not_found_words;
+	unordered_set<string> found_words;
+	unordered_set<string> words;
+	unordered_set<string> not_found_words;
+
+	GetWords(doc_str, words);
 	// Iterate on all active queries to compare them with this new document
 	for(i=0;i<n;i++)
 	{
@@ -199,6 +260,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			}
 		}
 		if(!matching_query)continue;
+
 		iq=0;
 		while(quer->str[iq] && matching_query)
 		{
@@ -211,73 +273,31 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			char qt=quer->str[iq];
 			quer->str[iq]=0;
 			lq=iq-lq;
-			/*
-			if(quer->match_type==MT_EXACT_MATCH) {
-				if(not_found_words.find(qword)!=not_found_words.end()) {
-					matching_query=false;
-					quer->str[iq]=qt;
-					break;
-				}
-			}
-			*/
+
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
-				int id=0;
-				while(doc_str[id] && !matching_word)
-				{
-					while(doc_str[id]==' ') id++;
-					if(!doc_str[id]) break;
-					const char* dword=&doc_str[id];
-
-					int ld=id;
-					while(doc_str[id] && doc_str[id]!=' ') id++;
-					ld=id-ld;
-
-					unsigned int edit_dist=EditDistance(qword, lq, dword, ld,quer->match_dist);
-					if(edit_dist<=quer->match_dist) matching_word=true;			
+				for(unordered_set<string>::iterator it=words.begin(); it!=words.end();it++){
+					unsigned int edit_dist=EditDistance(qword, lq, it->c_str(), it->length(),quer->match_dist);
+					if(edit_dist<=quer->match_dist) {matching_word=true; break;}			
 				}
 			} else {
 				/* HAMMING or EXACT*/
-				int id=0;
-				char *qw=qword;
-
 				if(found_words.find(qword)!=found_words.end()) {
 					matching_word=true;
 				}
-
-				while(doc_str[id] && !matching_word)
-				{
-					while(doc_str[id]==' ') id++;
-					if(!doc_str[id]) break;
-
-					unsigned int num_mismatches=0;
-					int fail=false;
-					while(doc_str[id] && doc_str[id]!=' '&& *qw) {
-						if(*qw!=doc_str[id]) {
-							num_mismatches++; 
-							if (quer->match_dist+1==num_mismatches){ fail=true; break;}
+				if(!matching_word) {
+					for(unordered_set<string>::iterator it=words.begin(); it!=words.end();it++){
+						if (lq!=it->length()) continue;
+						if(cmp(it->c_str(),qword,lq,quer->match_dist)) {
+							matching_word=true;
+							found_words.insert(qword);
+							break;
 						}
-						id++; qw++;
-					}
-					if(!*qw){ 
-						if (doc_str[id]!=' ' &&doc_str[id]) fail=true;
-					}
-					else
-						fail=true;
-
-					if(fail) 
-						while(doc_str[id] && doc_str[id]!=' ') id++;
-
-					qw=qword;
-					matching_word=!fail;
-					if(matching_word)
-						found_words.insert(qword);
+					}	
 				}
 			}
-			//done with qword
 
-			if(!matching_word)
-			{
+			if(!matching_word)	{
 				// This query has a word that does not match any word in the document
 				matching_query=false;
 
@@ -288,12 +308,10 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			quer->str[iq]=qt;
 		}/*while(quer->str[iq] && matching_query)*/
 
-		if(matching_query)
-		{
+		if(matching_query)	{
 			// This query matches the document
 			query_ids.push_back(quer->query_id);
 		}
-
 	}
 
 	Document doc;
