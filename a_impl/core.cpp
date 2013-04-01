@@ -277,7 +277,7 @@ ErrorCode MatchDocument(DocID doc_id, const char* doc_str)
 			bool matching_word=false;
 			if (quer->match_type==MT_EDIT_DIST) {
 				for(unordered_set<string>::iterator it=words.begin(); it!=words.end();it++){
-					unsigned int edit_dist=EditDistance(qword, lq, it->c_str(), it->length(),quer->match_dist);
+					unsigned int edit_dist=oldEditDistance(qword, lq, it->c_str(), it->length(),quer->match_dist);
 					if(edit_dist<=quer->match_dist) {matching_word=true; break;}			
 				}
 			} else {

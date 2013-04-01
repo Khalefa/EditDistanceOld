@@ -23,8 +23,14 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ * 
+ * Current version: 1.1 (Feb 13, 2013)
  *
- * Current version: 1.0 (initial release -- Feb 1, 2013)
+ * Version history:
+ *  - 1.1 (Feb 13, 2013)
+ *    * Fixed C incompatibility in enum definitions
+ *  - 1.0 (Feb 1, 2013)
+ *    * Initial release
  */
 
 #ifndef __SIGMOD_CORE_H_
@@ -61,7 +67,7 @@ typedef unsigned int DocID;
 
 
 /// Matching types:
-enum MatchType {
+typedef enum{
     /**
     * Two words match if they are exactly the same.
     */
@@ -78,10 +84,11 @@ enum MatchType {
     * of such operations must not exceed a specific threshold.
     */
     MT_EDIT_DIST
-};
+}
+MatchType;
 
 /// Error codes:			
-enum ErrorCode {
+typedef enum{
     /**
     * Must be returned by each core function unless specified otherwise.
     */
@@ -97,7 +104,8 @@ enum ErrorCode {
     * final submission.
     */
     EC_FAIL
-};
+}
+ErrorCode;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //*********************************************************************************************
