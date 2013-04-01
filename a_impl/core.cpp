@@ -40,7 +40,7 @@ c=H[i];H[i]=e;
 }
 while (H[top] >k)  top--;
 if (top == nb ) 
-return j;//k-1;
+return H[top];
 
 else top++;
 }
